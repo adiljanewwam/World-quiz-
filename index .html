@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ur">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trivia Quiz + WhatsApp Support</title>
+<style>
+body{font-family:Arial;margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#f0f8ff;transition:background 0.3s,color 0.3s;}
+body.dark{background:#333;color:white;}
+.container{width:90%;max-width:800px;background:white;border-radius:20px;overflow:hidden;position:relative;padding:20px;transition:background 0.3s,color 0.3s;}
+body.dark .container{background:#222;color:white;}
+.option{background:#eee;padding:15px;margin:10px 0;border-radius:10px;cursor:pointer;transition:background 0.3s,color 0.3s;}
+.option.selected{background:#add8e6;}
+.option.correct{background:#4CAF50;color:white;}
+.option.wrong{background:#f44336;color:white;}
+button{padding:10px 20px;margin:5px;border:none;border-radius:5px;cursor:pointer;}
+button:disabled{opacity:0.5;cursor:default;}
+#score{margin-top:15px;font-size:18px;font-weight:bold;}
+#translatedQuestion{font-size:16px;margin-top:10px;color:#444;}
+.top-bar{display:flex;justify-content:flex-start;align-items:center;margin-bottom:15px;gap:10px;}
+#backBtnTop,#closeBtnTop{font-weight:bold;cursor:pointer;padding:5px 10px;border-radius:5px;background:#ddd;}
+#backBtnTop:hover,#closeBtnTop:hover{background:#ccc;}
+.settings-btn{cursor:pointer;font-size:22px;position:absolute;top:10px;right:10px;}
+/* Modal Customer Support */
+#supportModal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);justify-content:center;align-items:center;z-index:1000;}
+#supportContent{background:white;padding:20px;border-radius:15px;width:300px;position:relative;transition:background 0.3s,color 0.3s;}
+body.dark #supportContent{background:#333;color:white;}
+#supportContent h3{text-align:center;margin-top:0;}
+#supportContent .closeModal{position:absolute;top:10px;right:15px;font-size:20px;cursor:pointer;}
+#supportContent a{display:block;margin:5px 0;color:#007bff;text-decoration:none;}
+</style>
+</head>
+<body>
+<div class="container">
+
+<div class="top-bar">
+<span id="backBtnTop" onclick="backQuestion()">⬅ Back</span>
+<span id="closeBtnTop" onclick="closeQuiz()">×</span>
+</div>
+<span class="settings-btn" onclick="openSupport()">⚙️ Support</span>
+
+<h2 id="quizTitle">🌍 World Quiz</h2>
+<div id="questionNumber"></div>
+<h3 id="questionText"></h3>
+<p id="translatedQuestion"></p>
+<div id="options"></div>
+<div class="next-prev">
+<button id="prevBtn" onclick="prevQuestion()">Previous</button>
+<button id="nextBtn" onclick="nextQuestion()">Next</button>
+</div>
+<div id="score">0 نمبر</div>
+</div>
+
+<!-- Customer Support Modal -->
+<div id="supportModal">
+  <div id="supportContent">
+    <span class="closeModal" onclick="closeSupport()">×</span>
+    <h3>Customer Support</h3>
+    <a href="tel:03437878299">03437878299</a>
+    <a href="tel:03375418495">03375418495</a>
+    <a href="tel:03299344300">03299344300</a>
+    <a href="https://chat.whatsapp.com/K0tCsOCduSR8050qEZ3sQg" target="_blank">Join WhatsApp Group</a>
+    <label><input type="checkbox" id="themeToggle" onchange="toggleTheme()"> Dark Mode</label>
+  </div>
+</div>
+
+<script>
+let questionBuffer=[], currentQuestionIndex=0, userAnswers=[], score=0, isFetching=false;
+
+// Dark mode
+function toggleTheme(){document.body.classList.toggle("dark");}
+
+// Support modal
+function openSupport(){document.getElementById("supportModal").style.display="flex";}
+function closeSupport(){document.getElementById("supportModal").style.display="none";}
+
+// Close quiz
+function closeQuiz(){if(confirm("کیا آپ واقعی کوئز بند کرنا چاہتے ہیں؟")){location.reload();}}
+
+// Fetch questions
+async function fetchQuestions(){
+    if(isFetching) return;
+    isFetching=true;
+    try{
+        const res = await fetch(`https://opentdb.com/api.php?amount=5&type=multiple`);
+        const data = await res.json();
+        const newQuestions = data.results.map(q=>({
+            question:decodeHTML(q.question),
+            options:shuffleArray([decodeHTML(q.correct_answer), ...q.incorrect_answers.map(a=>decodeHTML(a))]),
+            answer:decodeHTML(q.correct_answer)
+        }));
+        questionBuffer = questionBuffer.concat(newQuestions);
+        userAnswers=userAnswers.concat(Array(newQuestions.length).fill(null));
+    }catch(e){console.error(e);}
+    finally{isFetching=false;}
+}
+
+function decodeHTML(text){const txt=document.createElement("textarea");txt.innerHTML=text;return txt.value;}
+function shuffleArray(array){for(let i=array.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[array[i],array[j]]=[array[j],array[i]];}return array;}
+async function translateQuestion(text){try{const res=await fetch("https://api.mymemory.translated.net/get?q="+encodeURIComponent(text)+"&langpair=en|ur");const data=await res.json();document.getElementById("translatedQuestion").innerText=data.responseData.translatedText;}catch{document.getElementById("translatedQuestion").innerText="ترجمہ دستیاب نہیں";}}
+
+// Show question
+async function showQuestion(){
+    if(currentQuestionIndex>=questionBuffer.length-2) fetchQuestions();
+    if(currentQuestionIndex>=questionBuffer.length) await fetchQuestions();
+    const q = questionBuffer[currentQuestionIndex];
+    document.getElementById("questionNumber").innerText="سوال "+(currentQuestionIndex+1);
+    document.getElementById("questionText").innerText=q.question;
+    translateQuestion(q.question);
+    const optionsDiv=document.getElementById("options");
+    optionsDiv.innerHTML="";
+    q.options.forEach(opt=>{
+        const div=document.createElement("div");
+        div.className="option";
+        div.innerText=opt;
+        if(userAnswers[currentQuestionIndex]===opt){
+            div.classList.add("selected");
+            if(opt===q.answer) div.classList.add("correct");
+            else div.classList.add("wrong");
+        }
+        div.onclick=()=>selectOption(div,opt);
+        optionsDiv.appendChild(div);
+    });
+    updateScore();
+    updateNavButtons();
+}
+
+// Option selection
+function selectOption(el,value){
+    if(userAnswers[currentQuestionIndex]!==null) return;
+    userAnswers[currentQuestionIndex]=value;
+    const q = questionBuffer[currentQuestionIndex];
+    const options = document.querySelectorAll(".option");
+    options.forEach(o=>{
+        if(o.innerText===q.answer) o.classList.add("correct");
+        if(o.innerText===value && value!==q.answer) o.classList.add("wrong");
+        o.style.pointerEvents="none";
+    });
+    updateScore();
+}
+
+// Score
+function updateScore(){
+    score=0;
+    questionBuffer.forEach((q,i)=>{
+        if(userAnswers[i]===q.answer) score+=10;
+        else if(userAnswers[i]!==null && userAnswers[i]!==q.answer) score-=5;
+    });
+    document.getElementById("score").innerText=score+" نمبر";
+}
+
+// Navigation
+function nextQuestion(){if(currentQuestionIndex<questionBuffer.length-1){currentQuestionIndex++;showQuestion();}}
+function prevQuestion(){if(currentQuestionIndex>0){currentQuestionIndex--;showQuestion();}}
+function backQuestion(){prevQuestion();}
+function updateNavButtons(){
+    document.getElementById("prevBtn").disabled=currentQuestionIndex===0;
+    document.getElementById("backBtnTop").disabled=currentQuestionIndex===0;
+    document.getElementById("nextBtn").disabled=false;
+}
+
+// Start quiz
+(async function initQuiz(){await fetchQuestions();showQuestion();})();
+</script>
+</body>
+</html>
